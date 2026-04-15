@@ -25,3 +25,7 @@ wheels/
 .idea/
 .vscode/
 .DS_Store
+
+# 과제 정리
+Today'sAssignment.md
+md-image/
