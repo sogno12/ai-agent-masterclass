@@ -29,3 +29,9 @@ wheels/
 # 과제 정리
 Today'sAssignment.md
 md-image/
+
+# 데이터베이스 및 로컬 스토리지 방지 (Database & Local Storage)
+sessions.db
+chroma_db/
+*.sqlite3
+*.bin

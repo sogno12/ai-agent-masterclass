@@ -3,10 +3,19 @@ import os
 from dotenv import load_dotenv
 load_dotenv(override=True)
 
+# Ollama(로컬/원격)를 사용할 때 OpenAI 라이브러리가 키가 없다고 뻗는 현상을 방지하는 더미 호환성 설정
+if not os.getenv("OPENAI_API_KEY"):
+    os.environ["OPENAI_API_KEY"] = "ollama"
+
+# openai-agents 호환성을 위해 OLLAMA_API_URL이 있다면 자동으로 Base URL로 매핑
+if not os.getenv("OPENAI_BASE_URL") and os.getenv("OLLAMA_API_URL"):
+    os.environ["OPENAI_BASE_URL"] = os.getenv("OLLAMA_API_URL")
+
 from agents import Runner, set_tracing_disabled
 set_tracing_disabled(True) # OpenAI 서버로 Tracing 정보 전송(401 에러 원인)을 끕니다.
 
-from agent import life_coach_agent, current_query_log
+from agent import life_coach_agent, current_query_log, current_file_search_log
+from rag_service import add_document
 from sqlite_session import SQLiteSession
 
 st.set_page_config(page_title="AI Life Coach", page_icon="💡", layout="wide")
@@ -80,7 +89,25 @@ with st.sidebar:
     
     st.divider()
     
-    # 2. 디버깅 및 초기화 도구
+    st.subheader("📝 나의 기록 업로드")
+    uploaded_file = st.file_uploader("목표 및 일기 파일 (.txt, .md)", type=["txt", "md"])
+    if uploaded_file is not None:
+        # 파일이 바뀔 때만 재업로드되도록 하거나, 단순 데모용으로는 파일 객체 상태를 감지합니다.
+        # Streamlit은 uploader 객체 변경 시 리렌더링됩니다.
+        file_name = uploaded_file.name
+        if "last_uploaded" not in st.session_state or st.session_state["last_uploaded"] != file_name:
+            try:
+                file_content = uploaded_file.read().decode("utf-8")
+                with st.spinner("Vector DB에 문서를 기억하는 중..."):
+                    add_document(file_name, file_content)
+                st.session_state["last_uploaded"] = file_name
+                st.success(f"'{file_name}' 저장 완료! 코치가 참조할 수 있습니다.")
+            except Exception as e:
+                st.error(f"파일을 읽는 중 에러 발생: {e}")
+
+    st.divider()
+    
+    # 3. 디버깅 및 초기화 도구
     st.subheader("🛠 설정 및 디버그")
     
     def reset_db_callback():
@@ -96,6 +123,10 @@ with st.sidebar:
         else:
             raw_msgs = db.get_messages(st.session_state["current_session_id"])
             st.json(raw_msgs)
+            
+    # 사이드바 하단 잔상(Ghosting) 억제 장치
+    for _ in range(10):
+        st.empty()
 
 # ==========================================
 # 3. 메인 대화 영역
@@ -124,6 +155,7 @@ if current_id != "NEW" and messages and messages[-1]["role"] == "user":
     with st.chat_message("assistant"):
         # 검색 도구가 실행될 때마다 파이썬 전역 로그 배열 비우기
         current_query_log.clear()
+        current_file_search_log.clear()
         
         with st.spinner("라이프 코치가 최신 정보를 기반으로 생각하는 중..."):
             try:
@@ -146,14 +178,20 @@ if current_id != "NEW" and messages and messages[-1]["role"] == "user":
                     tool_msg = f"🔍 **[웹 검색: \"{query}\"]**"
                     db.add_message(current_id, "assistant", tool_msg) 
                 
+                # 파일 검색 내역도 인서트
+                for query in current_file_search_log:
+                    tool_msg = f"📁 **[기록 검색: \"{query}\"]**"
+                    db.add_message(current_id, "assistant", tool_msg)
+                
                 # 최종 텍스트 DB 인서트 및 즉시 rerun
                 db.add_message(current_id, "assistant", result.final_output)
                 st.rerun() # DB 저장 후 다시 렌더링하여 안정성 확보
                 
             except Exception as e:
-                st.error(f"오류가 발생했습니다. Ollama가 켜져 있는지 확인하세요.\n\n에러 메시지: {e}")
-                # 💡 에러 발생 시 앱이 'AI 응답 대기' 상태에 영원히 갇히지 않도록(사이드바 잠금 해전) 에러 메시지도 시스템 응답으로 DB에 저장합니다.
-                db.add_message(current_id, "assistant", "⚠️ 시스템 오류로 인해 답변을 생성하지 못했습니다. 설정을 확인하고 다시 시도해주세요.")
+                import traceback
+                traceback.print_exc()
+                st.error(f"오류가 발생했습니다. 터미널을 확인하세요.\n\n에러 메시지: {e}")
+                db.add_message(current_id, "assistant", f"⚠️ 시스템 오류가 발생했습니다: {str(e)}")
                 st.rerun()
 
 # 사용자 입력 위젯 (AI 응답 중일때는 무시되도록 처리)
