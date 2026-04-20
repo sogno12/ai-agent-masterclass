@@ -1,6 +1,8 @@
 import streamlit as st
 import os
+import re
 from dotenv import load_dotenv
+
 load_dotenv(override=True)
 
 # Ollama(로컬/원격)를 사용할 때 OpenAI 라이브러리가 키가 없다고 뻗는 현상을 방지하는 더미 호환성 설정
@@ -14,7 +16,7 @@ if not os.getenv("OPENAI_BASE_URL") and os.getenv("OLLAMA_API_URL"):
 from agents import Runner, set_tracing_disabled
 set_tracing_disabled(True) # OpenAI 서버로 Tracing 정보 전송(401 에러 원인)을 끕니다.
 
-from agent import life_coach_agent, current_query_log, current_file_search_log
+from agent import life_coach_agent, current_query_log, current_file_search_log, current_image_log
 from rag_service import add_document
 from sqlite_session import SQLiteSession
 
@@ -141,7 +143,29 @@ if not messages:
 # 이전 대화들 화면에 그리기
 for msg in messages:
     with st.chat_message(msg["role"]):
-        st.markdown(msg["content"])
+        content = msg["content"]
+        
+        # 메시지 내용 중에 "output/" 혹은 "output\" 으로 시작하는 png 파일 경로가 있는지 정규식으로 검사
+        # (예: output/vision_board_1713532800.png)
+        match = re.search(r'output[/\\][^ \n]+\.png', content)
+        
+        if match:
+            image_path = match.group(0)
+            
+            # 1. 파일이 실제로 존재하는지 확인 후 이미지 렌더링
+            if os.path.exists(image_path):
+                st.image(image_path, caption="당신을 위한 비전 보드", use_container_width=True)
+            else:
+                st.warning("⚠️ 이미지 파일을 찾을 수 없습니다. (경로 오류)")
+                
+            # 2. 이미지 경로는 화면에 그렸으니 텍스트에서는 지우고, 나머지 텍스트만 출력
+            text_without_path = content.replace(image_path, "").replace("파일 경로: ", "").strip()
+            if text_without_path:
+                st.markdown(text_without_path)
+                
+        else:
+            # 이미지 경로가 없다면 평소처럼 텍스트만 출력
+            st.markdown(content)
 
 # 💡 Ghosting(이전 화면 잔상) 억제 장치
 # Streamlit은 현재 스크립트가 완전히 끝나기 전까지 이전 화면 요소들을 반투명하게 남겨둡니다.
@@ -156,6 +180,7 @@ if current_id != "NEW" and messages and messages[-1]["role"] == "user":
         # 검색 도구가 실행될 때마다 파이썬 전역 로그 배열 비우기
         current_query_log.clear()
         current_file_search_log.clear()
+        current_image_log.clear()
         
         with st.spinner("라이프 코치가 최신 정보를 기반으로 생각하는 중..."):
             try:
@@ -181,6 +206,11 @@ if current_id != "NEW" and messages and messages[-1]["role"] == "user":
                 # 파일 검색 내역도 인서트
                 for query in current_file_search_log:
                     tool_msg = f"📁 **[기록 검색: \"{query}\"]**"
+                    db.add_message(current_id, "assistant", tool_msg)
+
+                # 이미지 생성 내역도 인서트
+                for query in current_image_log:
+                    tool_msg = f"🎨 **[이미지 생성: \"{query}\"]**"
                     db.add_message(current_id, "assistant", tool_msg)
                 
                 # 최종 텍스트 DB 인서트 및 즉시 rerun
