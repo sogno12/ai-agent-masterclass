@@ -1,7 +1,11 @@
 # utils.py
 import streamlit as st
+from datetime import datetime
 from agents import handoff, RunContextWrapper
 from models import UserAccountContext, HandoffData
+
+# 비동기 스레드에서 임시로 로그를 담아둘 전역 리스트(Queue)
+TOOL_EXECUTION_QUEUE = []
 
 def handle_handoff(
     wrapper: RunContextWrapper[UserAccountContext],
@@ -25,3 +29,14 @@ def make_handoff(agent):
         input_type=HandoffData,
         # input_filter=handoff_filters.remove_all_tools, # 필요시 주석 해제
     )
+
+def add_tool_log(agent_name: str, tool_name: str, detail: str):
+    """
+    에이전트의 도구 실행 기록을 임시 큐에 저장합니다.
+    """
+    TOOL_EXECUTION_QUEUE.append({
+        "time": datetime.now().strftime("%H:%M:%S"),
+        "agent_name": agent_name,
+        "tool_name": tool_name,
+        "detail": detail
+    })

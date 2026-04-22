@@ -1,37 +1,45 @@
-import os
-
-# README 내용 구성
-readme_content = """
 # 🍽️ AI Restaurant Bot (Multi-Agent System)
 
-Ollama 로컬 모델을 활용하여 레스토랑의 예약, 메뉴 안내, 주문을 도와주는 인공지능 멀티 에이전트 시스템입니다. OpenAI의 최신 `openai-agents` SDK를 기반으로 설계되었습니다.
+Ollama 로컬 모델을 활용하여 레스토랑의 예약, 메뉴 안내, 주문, 그리고 고객 불만 처리까지 도와주는 인공지능 멀티 에이전트 시스템입니다. OpenAI의 최신 `openai-agents` SDK를 기반으로 설계되었으며, 안정적인 서비스 운영을 위한 이중 가드레일과 실시간 모니터링 시스템을 갖추고 있습니다.
 
 ## 🚀 주요 기능
 
-- **Multi-Agent Orchestration**: Triage 에이전트가 고객의 요청을 분석하여 적절한 전문가(예약, 메뉴, 주문)에게 자동 연결합니다.
-- **Handoff Monitoring**: 에이전트 간 권한 위임이 발생할 때, 그 이유와 상세 내용을 사이드바에서 실시간으로 확인할 수 있습니다.
-- **Input Guardrails**: 레스토랑 업무와 무관한 질문(Off-topic)이 들어올 경우 보안 에이전트가 이를 감지하여 차단합니다.
-- **User Context Awareness**: 유저의 등급(Tier)과 이름을 인식하여 개인화된 응대를 제공합니다.
-- **Local LLM Integration**: Ollama를 통해 로컬 환경에서 모델을 실행하여 데이터 프라이버시를 보호합니다.
+### 1. Multi-Agent Orchestration
+- **Triage Agent**: 고객의 요청(예약, 메뉴, 주문, 불만)을 분석하여 최적의 전문가 에이전트에게 자동 연결합니다.
+- **Complaints Agent (신규)**: 불만이 감지된 고객에게 공감과 사과를 전하고, 할인 쿠폰 발급이나 매니저 콜백 등의 실질적인 해결책을 제공합니다.
+
+### 2. 이중 Guardrails (보안 및 품질 보장)
+- **Input Guardrails**: 레스토랑 업무와 무관한 질문(Off-topic)이나 부적절한 언어(욕설 등)를 감지하여 시스템 진입 단계에서 차단합니다.
+- **Output Guardrails**: 에이전트의 답변이 전문적인지, 시스템 프롬프트 등 내부 정보가 유출되지 않았는지 최종 검수하여 안전한 응답만 사용자에게 전달합니다.
+
+### 3. 실시간 통합 모니터링
+- **Handoff Monitor**: 에이전트 간 권한 위임 발생 시 원인과 상세 내용을 실시간으로 확인합니다.
+- **Tool Monitor (신규)**: 에이전트가 내부적으로 어떤 함수(할인 쿠폰 발급, 매니저 호출 등)를 실행했는지 시간과 상세 파라미터를 사이드바에서 즉시 모니터링합니다.
+- **Async Logic**: Streamlit의 비동기 환경에서 발생하는 컨텍스트 유실 문제를 전역 큐(Global Queue) 방식으로 해결하여 안정적인 로그 업데이트를 보장합니다.
+
+### 4. 개인화된 고객 응대
+- **Context Awareness**: 유저의 등급(VIP/Basic)과 이름을 인식하여 차별화된 응대 톤과 서비스를 제공합니다.
 
 ## 🛠️ 기술 스택
 
 - **Language**: Python 3.x
 - **Framework**: [OpenAI Agents SDK](https://github.com/openai/openai-agents-python)
 - **UI**: Streamlit
-- **LLM Engine**: Ollama (Gemma, Llama 등)
+- **LLM Engine**: Ollama (Llama 3.1, Qwen 2.5, Gemma 등)
 - **Package Manager**: uv
 
 ## 📂 프로젝트 구조
 
 ```text
 260421-restaurant-bot/
-├── main.py                 # Streamlit UI 및 메인 실행 로직
-├── models.py               # Pydantic 기반 데이터 모델 (Context, HandoffData)
-├── utils.py                # Handoff 생성 및 로그 처리를 위한 공통 유틸리티
-├── .env                    # 환경 변수 설정 파일
+├── main.py                 # Streamlit UI 및 메인 실행 로직 (비동기 로그 처리 포함)
+├── models.py               # Pydantic 기반 데이터 모델 (Guardrail, Context 등)
+├── utils.py                # Handoff/Tool 실행 기록 및 유틸리티 함수
+├── .env                    # 환경 변수 및 로컬 모델 설정
 └── restaurant_agents/      # 전문가 에이전트 폴더
-    ├── triage.py           # Triage 에이전트 및 가드레일 정의
+    ├── triage.py           # Triage 에이전트 및 이중 가드레일(In/Out) 정의
+    ├── complaints.py       # 고객 불만 처리 전문가 (Tool 호출 기능 포함)
     ├── menu.py             # 메뉴 및 알레르기 안내 전문가
     ├── order.py            # 주문 처리 전문가
-    └── reservation.py      # 테이블 예약 전문가 (Dynamic Instructions 적용)
+    └── reservation.py      # 테이블 예약 전문가
+```

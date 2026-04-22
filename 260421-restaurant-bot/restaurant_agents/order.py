@@ -27,9 +27,11 @@ order_agent = Agent(
 from restaurant_agents.menu import menu_agent
 from restaurant_agents.reservation import reservation_agent
 from restaurant_agents.triage import triage_agent
+from restaurant_agents.complaints import complaints_agent
 
 order_agent.handoffs = [
         make_handoff(menu_agent),
         make_handoff(reservation_agent),
         make_handoff(triage_agent),
+        make_handoff(complaints_agent),
     ]
