@@ -30,9 +30,13 @@ wheels/
 Today'sAssignment.md
 md-image/
 output/
+output_images/
 
 # 데이터베이스 및 로컬 스토리지 방지 (Database & Local Storage)
 sessions.db
 chroma_db/
 *.sqlite3
 *.bin
+sessions.db/
+*/sessions.db
+*.db
